@@ -1,0 +1,23 @@
+name: ChatApp CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Build backend
+        run: docker build -t backend ./backend
+
+      - name: Build frontend
+        run: docker build -t frontend ./frontend
+
+      - name: Build successful
+        run: echo "CI pipeline completed"
