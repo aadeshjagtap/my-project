@@ -2,7 +2,6 @@ import express from "express";
 import dotenv from "dotenv";
 import cookieParser from "cookie-parser";
 import cors from "cors";
-import client from "prom-client";
 
 import path from "path";
 
@@ -16,21 +15,16 @@ import { app, server } from "./lib/socket.js";
 // Load environment variables from .env file
 dotenv.config();
 
-client.collectDefaultMetrics();
-const register = client.register;
-
 const PORT = process.env.PORT;
 const __dirname = path.resolve();
 
 app.use(express.json());
 app.use(cookieParser());
-
 app.use(
   cors({
-    origin:
-      process.env.NODE_ENV === "production"
-        ? ["http://localhost:8080", "http://localhost"]
-        : "http://localhost:5173",
+    origin: process.env.NODE_ENV === "production" 
+      ? ["http://localhost:8080", "http://localhost"] 
+      : "http://localhost:5173",
     credentials: true,
   })
 );
@@ -38,11 +32,6 @@ app.use(
 app.use("/api/auth", authRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/health", healthRoutes);
-
-app.get("/metrics", async (req, res) => {
-  res.set("Content-Type", register.contentType);
-  res.end(await register.metrics());
-});
 
 if (process.env.NODE_ENV === "production") {
   app.use(express.static(path.join(__dirname, "../frontend/dist")));

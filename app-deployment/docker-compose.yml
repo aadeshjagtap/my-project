@@ -1,24 +1,27 @@
 services:
+
+  # ================= CHAT APP FRONTEND =================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "8081:80"
+      - "8080:80"
     depends_on:
       - backend
-    networks:
-      - chat-network
     environment:
       - BACKEND_URL=http://backend:5001
+    networks:
+      - chat-network
     restart: unless-stopped
 
+  # ================= CHAT APP BACKEND =================
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     ports:
-      - "5002:5001"
+      - "5001:5001"
     depends_on:
       - mongo
     env_file:
@@ -27,10 +30,11 @@ services:
       - chat-network
     restart: unless-stopped
 
+  # ================= MONGO DB =================
   mongo:
     image: mongo:latest
     ports:
-      - "27018:27017"
+      - "27017:27017"
     environment:
       - MONGO_INITDB_ROOT_USERNAME=root
       - MONGO_INITDB_ROOT_PASSWORD=admin
@@ -40,9 +44,62 @@ services:
       - chat-network
     restart: unless-stopped
 
+  # ================= PROMETHEUS =================
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  # ================= GRAFANA =================
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+    depends_on:
+      - prometheus
+      - loki
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  # ================= LOKI =================
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+  # ================= PROMTAIL =================
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    volumes:
+      - /var/log:/var/log
+      - ./monitoring/promtail/promtail.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+    networks:
+      - chat-network
+    restart: unless-stopped
+
+# ================= NETWORK =================
 networks:
   chat-network:
     driver: bridge
 
+# ================= VOLUMES =================
 volumes:
   mongodb_data:
