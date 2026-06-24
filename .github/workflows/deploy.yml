@@ -1,33 +1,46 @@
 name: ChatApp Full CI/CD
-
 on:
   push:
     branches:
       - main
   workflow_dispatch:
-
 jobs:
   cicd:
     runs-on: ubuntu-latest
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v4
 
       - name: Build backend image
-        run: docker build -t backend ./app-deployment/backend
+        run: docker build -t backend:latest ./app-deployment/backend
 
       - name: Build frontend image
-        run: docker build -t frontend ./app-deployment/frontend
+        run: docker build -t frontend:latest ./app-deployment/frontend
+
+      - name: Run Trivy scan on backend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: backend:latest
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
+
+      - name: Run Trivy scan on frontend
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: frontend:latest
+          format: table
+          exit-code: 0
+          severity: CRITICAL,HIGH
 
       - name: Run backend container test
-        run: docker run -d -p 5000:5000 --name backend-test backend
+        run: docker run -d -p 5000:5000 --name backend-test backend:latest
 
       - name: Run frontend container test
-        run: docker run -d -p 8080:80 --name frontend-test frontend
+        run: docker run -d -p 8080:80 --name frontend-test frontend:latest
 
       - name: Verify running containers
         run: docker ps
 
       - name: Deployment successful
-        run: echo "Application built, tested and deployed"
+        run: echo "Application built, scanned with Trivy, tested and deployed"

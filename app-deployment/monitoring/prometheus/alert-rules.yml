@@ -1,0 +1,43 @@
+groups:
+  - name: chat-app-alerts
+    rules:
+
+      # Pod down alert
+      - alert: PodDown
+        expr: up{job="chat-backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Pod is down"
+          description: "Backend pod has been down for more than 1 minute."
+
+      # High CPU alert
+      - alert: HighCPUUsage
+        expr: rate(process_cpu_seconds_total{job="chat-backend"}[1m]) * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 2 minutes."
+
+      # High Memory alert
+      - alert: HighMemoryUsage
+        expr: process_resident_memory_bytes{job="chat-backend"} / 1024 / 1024 > 400
+        for: 2m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 400MB for more than 2 minutes."
+
+      # HPA Max Replicas alert
+      - alert: HPAMaxReplicasReached
+        expr: kube_horizontalpodautoscaler_status_current_replicas == kube_horizontalpodautoscaler_spec_max_replicas
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "HPA reached maximum replicas"
+          description: "HPA has reached max replicas - cluster may need more capacity."
