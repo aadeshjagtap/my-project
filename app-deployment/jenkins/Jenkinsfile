@@ -1,41 +1,76 @@
 pipeline {
     agent any
 
+    environment {
+        BACKEND_IMAGE  = 'imadesh/chatapp-backend'
+        FRONTEND_IMAGE = 'imadesh/chatapp-frontend'
+        TAG            = "${env.BUILD_NUMBER}"
+        KUBECONFIG     = '/var/lib/jenkins/.kube/config'
+    }
+
     stages {
         stage('Checkout') {
             steps {
-                git branch: 'master',
-                    url: 'https://github.com/iemafzalhassan/full-stack_chatApp.git'
+                checkout scm
             }
         }
 
-        stage('Test') {
+        stage('Build Images') {
             steps {
-                script {
-                    sh '''
-                        sleep 15
-                        curl -f http://localhost:5001/health
-                        curl -f http://localhost/ || exit 1
-                    '''
+                dir('app-deployment') {
+                    sh 'docker build -t ${BACKEND_IMAGE}:${TAG} ./backend'
+                    sh 'docker build -t ${FRONTEND_IMAGE}:${TAG} ./frontend'
                 }
             }
         }
 
-        stage('Deploy') {
+        stage('Trivy Scan') {
             steps {
-                script {
-                    sh 'docker-compose up -d --build'
+                sh 'trivy image --severity CRITICAL,HIGH --exit-code 0 ${BACKEND_IMAGE}:${TAG}'
+                sh 'trivy image --severity CRITICAL,HIGH --exit-code 0 ${FRONTEND_IMAGE}:${TAG}'
+            }
+        }
+
+        stage('Push to Docker Hub') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'dockerhub-creds',
+                                                  usernameVariable: 'DH_USER',
+                                                  passwordVariable: 'DH_PASS')]) {
+                    sh 'echo "$DH_PASS" | docker login -u "$DH_USER" --password-stdin'
+                    sh 'docker push ${BACKEND_IMAGE}:${TAG}'
+                    sh 'docker push ${FRONTEND_IMAGE}:${TAG}'
                 }
+            }
+        }
+
+        stage('Helm Deploy') {
+            steps {
+                sh '''
+                    helm upgrade --install chat-app ./app-deployment/helm/chat-app \
+                      --set backend.tag=${TAG} \
+                      --set frontend.tag=${TAG}
+                '''
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh 'kubectl rollout status deployment/backend -n chat-app --timeout=120s'
+                sh 'kubectl rollout status deployment/frontend -n chat-app --timeout=120s'
+                sh 'kubectl get pods -n chat-app'
             }
         }
     }
 
     post {
+        always {
+            sh 'docker logout || true'
+        }
         success {
-            echo 'Deployment and tests completed successfully!'
+            echo "Build ${TAG} deployed successfully."
         }
         failure {
-            echo 'Deployment or tests failed.'
+            echo "Build ${TAG} failed. Check the stage logs."
         }
     }
 }
